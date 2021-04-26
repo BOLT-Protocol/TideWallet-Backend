@@ -4,7 +4,7 @@ class CfcParserManager extends EthParserManagerBase {
   constructor(config, database, logger) {
     super('80000CFC', config, database, logger);
 
-    this.options = config.blockchain.ethereum_mainnet;
+    this.options = config.blockchain.cafeca;
   }
 
   async init() {

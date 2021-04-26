@@ -53,12 +53,20 @@ path = "/"
 user = ''
 password = ''
 
+[blockchain.titan]
+blockchain_id = "80001F51"
+protocol = "http:"
+hostname = "127.0.0.1"
+port = 8545
+path = "/"
+
 [syncSwitch]
 bitcoin_mainnet = false
 bitcoin_testnet = false
 ethereum_mainnet = false
 ethereum_ropsten = false
 cafeca = false
+titan = false
 cryptoRate = true
 rate = true
 
@@ -66,6 +74,7 @@ rate = true
 ethereum = 15000
 cafeca = 15000
 bitcoin = 450000
+titan = 15000
 fee = 3600000
 pending = 15000
 

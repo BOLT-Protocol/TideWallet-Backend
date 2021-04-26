@@ -9,6 +9,7 @@ const BtcTestnetCrawlerManager = require('./BtcTestnetCrawlerManager');
 const EthCrawlerManager = require('./EthCrawlerManager');
 const EthRopstenCrawlerManager = require('./EthRopstenCrawlerManager');
 const CfcCrawlerManager = require('./CfcCrawlerManager');
+const TtnCrawlerManager = require('./TtnCrawlerManager');
 
 // parser
 const BtcParserManager = require('./BtcParserManager');
@@ -16,6 +17,7 @@ const BtcTestnetParserManager = require('./BtcTestnetParserManager');
 const EthParserManager = require('./EthParserManager');
 const EthRopstenParserManager = require('./EthRopstenParserManager');
 const CfcParserManager = require('./CfcParserManager');
+const TtnParserManager = require('./TtnParserManager');
 
 class Manager extends Bot {
   constructor() {
@@ -144,6 +146,7 @@ class Manager extends Bot {
      * 'ethereum_mainnet',
      * 'ethereum_ropsten',
      * 'cafeca'
+     * 'titan'
      */
     syncSwitchSet.forEach((blockchianName) => {
       if (!syncSwitch[blockchianName]) return;
@@ -168,6 +171,10 @@ class Manager extends Bot {
         case 'cafeca':
           result.push(new CfcCrawlerManager(this.config, this.database, this.logger));
           result.push(new CfcParserManager(this.config, this.database, this.logger));
+          break;
+        case 'titan':
+          result.push(new TtnCrawlerManager(this.config, this.database, this.logger));
+          result.push(new TtnParserManager(this.config, this.database, this.logger));
           break;
         default:
       }
