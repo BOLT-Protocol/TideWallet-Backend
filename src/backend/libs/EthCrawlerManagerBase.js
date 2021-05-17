@@ -402,146 +402,124 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
       const pendingTxs = await this.pendingTransactionFromPeer();
       const blockHeightStr = await this.blockNumberFromPeer();
       const blockHeight = parseInt(blockHeightStr, 16);
+      console.log('blockHeight:', blockHeight);
+      console.log('pendingTxs:', pendingTxs.length);
 
       // 3. create transaction which is not in step 1 array
       const newTxs = pendingTxs.filter((pendingTx) => transactions.every((transaction) => pendingTx.hash !== transaction.txid));
+      const insertTx = [];
       for (const tx of newTxs) {
         try {
           const bnAmount = new BigNumber(tx.value, 16);
           const bnGasPrice = new BigNumber(tx.gasPrice, 16);
           const bnGas = new BigNumber(tx.gas, 16);
           const fee = bnGasPrice.multipliedBy(bnGas).toFixed();
+          const destination_addresses = tx.to ? tx.to : '';
 
-          let txResult = await this.transactionModel.findOne({
-            where: {
-              currency_id: this.currencyInfo.currency_id,
-              txid: tx.hash,
-            },
+          insertTx.push({
+            currency_id: this.currencyInfo.currency_id,
+            txid: tx.hash,
+            source_addresses: tx.from,
+            destination_addresses,
+            amount: bnAmount.toFixed(),
+            note: tx.input,
+            block: parseInt(tx.blockNumber, 16),
+            nonce: parseInt(tx.nonce, 16),
+            fee,
+            gas_price: bnGasPrice.toFixed(),
           });
-          if (!txResult) {
-            this.logger.debug(`[${this.constructor.name}] parsePendingTransaction create transaction(${tx.hash})`);
-            const destination_addresses = tx.to ? tx.to : '';
-            txResult = await this.transactionModel.create({
-              currency_id: this.currencyInfo.currency_id,
-              txid: tx.hash,
-              source_addresses: tx.from,
-              destination_addresses,
-              amount: bnAmount.toFixed(),
-              note: tx.input,
-              block: parseInt(tx.blockNumber, 16),
-              nonce: parseInt(tx.nonce, 16),
-              fee,
-              gas_price: bnGasPrice.toFixed(),
+
+          if (destination_addresses) {
+            // new receive transaction and notify app
+            const findBlockTimestamp = await this.blockScannedModel.findOne({
+              where: { block: parseInt(tx.blockNumber, 16) },
+            });
+            const timestamp = findBlockTimestamp || Math.floor(Date.now() / 1000);
+
+            const findAddressTransactions = await this.accountAddressModel.findOne({
+              where: { address: destination_addresses },
+              include: [
+                {
+                  model: this.accountModel,
+                  attributes: ['user_id', 'blockchain_id'],
+                },
+              ],
             });
 
-            if (destination_addresses) {
-              // new receive transaction and notify app
-              const findBlockTimestamp = await this.blockScannedModel.findOne({
-                where: { block: parseInt(tx.blockNumber, 16) },
+            if (findAddressTransactions) {
+              const findAccountCurrency = await this.accountCurrencyModel.findOne({
+                where: { account_id: findAddressTransactions.account_id },
               });
-              const timestamp = findBlockTimestamp || Math.floor(Date.now() / 1000);
 
-              const findAddressTransactions = await this.accountAddressModel.findOne({
-                where: { address: destination_addresses },
-                include: [
-                  {
-                    model: this.accountModel,
-                    attributes: ['user_id', 'blockchain_id'],
+              console.log('fcm tx new!!!!!!!!!!', JSON.stringify({
+                title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
+                body: JSON.stringify({
+                  blockchainId: this.bcid,
+                  eventType: 'TRANSACTION_NEW',
+                  currencyId: this.currencyInfo.currency_id,
+                  accountId: findAccountCurrency.accountCurrency_id,
+                  data: {
+                    txid: tx.hash,
+                    status: null,
+                    amount: bnAmount.toFixed(),
+                    symbol: this.currencyInfo.symbol,
+                    direction: 'receive',
+                    confirmations: 0,
+                    timestamp,
+                    source_addresses: tx.from,
+                    destination_addresses: tx.to ? tx.to : '',
+                    fee,
+                    gas_price: bnGasPrice.toFixed(),
+                    gas_used: null,
+                    note: tx.input,
+                    balance: this.currencyInfo.type === 1
+                      ? await Utils.ethGetBalanceByAddress(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.decimals)
+                      : await Utils.getERC20Token(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.contract, this.currencyInfo.decimals),
                   },
-                ],
-              });
+                }),
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
+              })); // -- no console.log
 
-              if (findAddressTransactions) {
-                const findAccountCurrency = await this.accountCurrencyModel.findOne({
-                  where: { account_id: findAddressTransactions.account_id },
-                });
-
-                console.log('fcm tx new!!!!!!!!!!', JSON.stringify({
-                  title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
-                  body: JSON.stringify({
-                    blockchainId: this.bcid,
-                    eventType: 'TRANSACTION_NEW',
-                    currencyId: this.currencyInfo.currency_id,
-                    accountId: findAccountCurrency.accountCurrency_id,
-                    data: {
-                      txid: tx.hash,
-                      status: null,
-                      amount: bnAmount.toFixed(),
-                      symbol: this.currencyInfo.symbol,
-                      direction: 'receive',
-                      confirmations: 0,
-                      timestamp,
-                      source_addresses: tx.from,
-                      destination_addresses: tx.to ? tx.to : '',
-                      fee,
-                      gas_price: bnGasPrice.toFixed(),
-                      gas_used: null,
-                      note: tx.input,
-                      balance: this.currencyInfo.type === 1
-                        ? await Utils.ethGetBalanceByAddress(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.decimals)
-                        : await Utils.getERC20Token(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.contract, this.currencyInfo.decimals),
-                    },
-                  }),
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                })); // -- no console.log
-
-                await this.fcm.messageToUserTopic(findAddressTransactions.Account.user_id, {
-                  title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
-                }, {
-                  title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
-                  body: JSON.stringify({
-                    blockchainId: this.bcid,
-                    eventType: 'TRANSACTION_NEW',
-                    currencyId: this.currencyInfo.currency_id,
-                    accountId: findAccountCurrency.accountCurrency_id,
-                    data: {
-                      txid: tx.hash,
-                      status: null,
-                      amount: bnAmount.toFixed(),
-                      symbol: this.currencyInfo.symbol,
-                      direction: 'receive',
-                      confirmations: 0,
-                      timestamp,
-                      source_addresses: tx.from,
-                      destination_addresses: tx.to ? tx.to : '',
-                      fee,
-                      gas_price: bnGasPrice.toFixed(),
-                      gas_used: null,
-                      note: tx.input,
-                      balance: this.currencyInfo.type === 1
-                        ? await Utils.ethGetBalanceByAddress(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.decimals)
-                        : await Utils.getERC20Token(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.contract, this.currencyInfo.decimals),
-                    },
-                  }),
-                  click_action: 'FLUTTER_NOTIFICATION_CLICK',
-                });
-              }
-            }
-          } else {
-            const updateResult = await this.transactionModel.update(
-              {
-                source_addresses: tx.from,
-                destination_addresses: tx.to ? tx.to : '',
-                amount: bnAmount.toFixed(),
-                note: tx.input,
-                block: parseInt(tx.blockNumber, 16),
-                nonce: parseInt(tx.nonce, 16),
-                gas_price: bnGasPrice.toFixed(),
+              await this.fcm.messageToUserTopic(findAddressTransactions.Account.user_id, {
+                title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
               }, {
-                where: {
-                  currency_id: this.currencyInfo.currency_id,
-                  txid: tx.hash,
-                },
-                returning: true,
-              },
-            );
-            [, [txResult]] = updateResult;
+                title: `receive ${bnAmount.dividedBy(10 ** this.currencyInfo.decimals).toFixed()} ${this.currencyInfo.symbol}`,
+                body: JSON.stringify({
+                  blockchainId: this.bcid,
+                  eventType: 'TRANSACTION_NEW',
+                  currencyId: this.currencyInfo.currency_id,
+                  accountId: findAccountCurrency.accountCurrency_id,
+                  data: {
+                    txid: tx.hash,
+                    status: null,
+                    amount: bnAmount.toFixed(),
+                    symbol: this.currencyInfo.symbol,
+                    direction: 'receive',
+                    confirmations: 0,
+                    timestamp,
+                    source_addresses: tx.from,
+                    destination_addresses: tx.to ? tx.to : '',
+                    fee,
+                    gas_price: bnGasPrice.toFixed(),
+                    gas_used: null,
+                    note: tx.input,
+                    balance: this.currencyInfo.type === 1
+                      ? await Utils.ethGetBalanceByAddress(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.decimals)
+                      : await Utils.getERC20Token(findAddressTransactions.Account.blockchain_id, findAddressTransactions.address, this.currencyInfo.contract, this.currencyInfo.decimals),
+                  },
+                }),
+                click_action: 'FLUTTER_NOTIFICATION_CLICK',
+              });
+            }
           }
         } catch (error) {
           this.logger.error(`[${this.constructor.name}] parsePendingTransaction create transaction(${tx.hash}) error: ${error}`);
         }
       }
 
+      await this.transactionModel.bulkCreate(insertTx, {
+        updateOnDuplicate: ['currency_id', 'txid'],
+      });
       const findPending = await this.pendingTransactionModel.findOne({
         where: {
           blockchain_id: this.bcid,
@@ -567,6 +545,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
         });
       }
     } catch (error) {
+      console.log('error:', error);
       this.logger.debug(`[${this.constructor.name}] updatePendingTransaction error: ${error}`);
       return Promise.reject(error);
     }
