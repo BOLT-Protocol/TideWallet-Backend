@@ -92,7 +92,7 @@ class BtcParserManagerBase extends ParserManagerBase {
       }
 
       // 5. update pendingTransaction
-      // await this.parsePendingTransaction();
+      await this.parsePendingTransaction();
 
       this.createJob();
     } catch (error) {
