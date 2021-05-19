@@ -453,19 +453,27 @@ class BtcCrawlerManagerBase extends CrawlerManagerBase {
   }
 
   async updatePendingTransaction() {
-    this.logger.debug(`[${this.constructor.name}] updatePendingTransaction`);
+    this.logger.log(`[${this.constructor.name}] updatePendingTransaction`); //--
+    const step1 = new Date().getTime(); //--
+    // this.logger.debug(`[${this.constructor.name}] updatePendingTransaction`);
     try {
       // 1. find all transaction where status is null(means pending transaction)
       const transactions = await this.getTransactionsResultNull();
+      const step2 = new Date().getTime(); //--
+      console.log(`[${this.constructor.name}] updatePendingTransaction step1: ${(step2 - step1) / 1000}sec`); //--
 
       // 2. get last pending transaction from pendingTransaction table
       const pendingTxids = await this.pendingTransactionFromPeer();
       const blockHeight = await this.blockNumberFromPeer();
+      const step3 = new Date().getTime(); //--
+      console.log(`[${this.constructor.name}] updatePendingTransaction step2: ${(step3 - step2) / 1000}sec`); //--
 
       // 3. create transaction which is not in step 1 array
       const newTxids = pendingTxids.filter((pendingTxid) => transactions.every((transaction) => pendingTxid !== transaction.txid));
       for (const txid of newTxids) {
         try {
+          this.logger.log(`[${this.constructor.name}] updatePendingTransaction getTransactionByTxidFromPeer(${txid})`); //--
+
           const tx = await this.getTransactionByTxidFromPeer(txid);
           const { destination_addresses, txExist, uxtoUpdate } = await BtcParserBase.parseTx.call(this, tx, this.currencyInfo, tx.timestamp);
 
@@ -604,7 +612,8 @@ class BtcCrawlerManagerBase extends CrawlerManagerBase {
           this.logger.error(`[${this.constructor.name}] parsePendingTransaction create transaction(${txid}) error: ${error}`);
         }
       }
-
+      const step4 = new Date().getTime(); //--
+      console.log(`[${this.constructor.name}] updatePendingTransaction step3: ${(step4 - step3) / 1000}sec`); //--
       const findPending = await this.pendingTransactionModel.findOne({
         where: {
           blockchain_id: this.bcid,
@@ -629,6 +638,9 @@ class BtcCrawlerManagerBase extends CrawlerManagerBase {
           },
         });
       }
+      const step5 = new Date().getTime(); //--
+      console.log(`[${this.constructor.name}] updatePendingTransaction step4: ${(step5 - step4) / 1000}sec`); //--
+      console.log(`[${this.constructor.name}] updatePendingTransaction whole: ${(step5 - step1) / 1000}sec`); //--
     } catch (error) {
       this.logger.error(`[${this.constructor.name}] updatePendingTransaction error: ${error}`);
       return Promise.reject(error);
