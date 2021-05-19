@@ -58,7 +58,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
   }
 
   async blockNumberFromPeer() {
-    this.logger.debug(`[${this.constructor.name}] blockNumberFromPeer`);
+    this.logger.log(`[${this.constructor.name}] blockNumberFromPeer`);
     const type = 'getBlockcount';
     const options = dvalue.clone(this.options);
     options.data = this.constructor.cmd({ type });
@@ -249,7 +249,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
   }
 
   async pendingTransactionFromPeer() {
-    this.logger.debug(`[${this.constructor.name}] pendingTransactionFromPeer`);
+    this.logger.log(`[${this.constructor.name}] pendingTransactionFromPeer`);
     try {
       const type = 'getPendingTxs';
       const options = dvalue.clone(this.options);
@@ -393,7 +393,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
   }
 
   async updatePendingTransaction() {
-    this.logger.debug(`[${this.constructor.name}] updatePendingTransaction`);
+    this.logger.log(`[${this.constructor.name}] updatePendingTransaction`);
     try {
       // 1. find all transaction where status is null(means pending transaction)
       const transactions = await this.getTransactionsResultNull();
@@ -405,6 +405,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
 
       // 3. create transaction which is not in step 1 array
       const newTxs = pendingTxs.filter((pendingTx) => transactions.every((transaction) => pendingTx.hash !== transaction.txid));
+      this.logger.log(`[${this.constructor.name}] updatePendingTransaction filter newTxs!!!`);
       for (const tx of newTxs) {
         try {
           const bnAmount = new BigNumber(tx.value, 16);
@@ -419,7 +420,7 @@ class EthCrawlerManagerBase extends CrawlerManagerBase {
             },
           });
           if (!txResult) {
-            this.logger.debug(`[${this.constructor.name}] parsePendingTransaction create transaction(${tx.hash})`);
+            this.logger.log(`[${this.constructor.name}] parsePendingTransaction create transaction(${tx.hash})`);
             const destination_addresses = tx.to ? tx.to : '';
             txResult = await this.transactionModel.create({
               currency_id: this.currencyInfo.currency_id,

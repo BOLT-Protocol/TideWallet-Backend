@@ -182,14 +182,14 @@ class CrawlerManagerBase {
   }
 
   async getTransactionsResultNull() {
-    this.logger.debug(`[${this.constructor.name}] getTransactionsResultNull`);
+    this.logger.log(`[${this.constructor.name}] getTransactionsResultNull`);
     try {
       const pendingTxs = await this.transactionModel.findAll({
         where: { currency_id: this.currencyInfo.currency_id, result: null },
       });
       return pendingTxs;
     } catch (error) {
-      this.logger.debug(`[${this.constructor.name}] getTransactionsResultNull error: ${error}`);
+      this.logger.error(`[${this.constructor.name}] getTransactionsResultNull error: ${error}`);
       return [];
     }
   }
