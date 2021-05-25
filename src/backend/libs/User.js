@@ -171,7 +171,7 @@ class User extends Bot {
           address: wallet.address,
         });
 
-        if (accounts[i].blockchain_id === '80000000' || accounts[i].blockchain_id === 'F0000000'|| accounts[i].blockchain_id === '80000091'|| accounts[i].blockchain_id === 'F0000091') {
+        if (accounts[i].blockchain_id === '80000000' || accounts[i].blockchain_id === 'F0000000' || accounts[i].blockchain_id === '80000091' || accounts[i].blockchain_id === 'F0000091') {
           const changeWallet = hdWallet.getWalletInfo({ coinType, blockchainID: accounts[i].Blockchain.blockchain_id, change: 1 });
           await _db.AccountAddress.create({
             accountAddress_id: uuidv4(),
@@ -260,84 +260,92 @@ class User extends Bot {
     }
   }
 
-  async test({ token, body }) {
+  async _AddNewSupportBlockchainAccount() {
     try {
-      const tmp = await this.database.db.ethereum_ropsten.BlockScanned.findOne({
-        where: { block: new BigNumber('0x9864e9').toString() },
-      });
-      return tmp;
-
-      const {
-        txid, accountId, currencyId, blockchainId,
-      } = body;
-      if (!token) return new ResponseFormat({ message: 'invalid token', code: Codes.INVALID_ACCESS_TOKEN });
-      const tokenInfo = await Utils.verifyToken(token);
-
-      const DBName = Utils.blockchainIDToDBName(blockchainId);
-      const _db = this.database.db[DBName];
-
-      const findBlockInfo = await _db.Blockchain.findOne({
-        where: { blockchain_id: blockchainId },
-      });
-
-      const findAccountCurrency = await _db.AccountCurrency.findOne({
-        where: {
-          accountCurrency_id: accountId,
+      const newBlockchain = [
+        {
+          blockchain_id: '80000091',
+          currency_id: '5b1ea92e584bf50021130612',
+          coin_type: 145,
         },
-        attributes: ['account_id', 'accountCurrency_id'],
-      });
-      const findAccountAddress = await _db.AccountAddress.findOne({
-        where: {
-          account_id: findAccountCurrency.account_id,
+        {
+          blockchain_id: 'F0000091',
+          currency_id: '8e1ea17f-cd56-42ab-a24b-82bf8abc851b',
+          coin_type: 1,
         },
-        attributes: ['accountAddress_id'],
+      ];
+
+      const findUser = await this.defaultDBInstance.User.findAll({
+        attributes: ['user_id'],
       });
 
-      const findTx = await _db.AddressTransaction.findOne({
-        where: {
-          accountAddress_id: findAccountAddress.accountAddress_id,
-          currency_id: currencyId,
-        },
-        include: [
-          {
-            model: _db.Transaction,
-          },
-        ],
-      });
-      console.log('before findAccountCurrency!!!');
+      for (let i = 0; i < findUser.length; i++) {
+        const _user = findUser[i];
 
-      await this.fcm.messageToUserTopic(tokenInfo.userID, {
-        title: `tx (${tx.txid}) is confirmations`,
-      }, {
-        title: `tx (${tx.txid}) is confirmations`,
-        body: JSON.stringify({
-          blockchainId,
-          accountId: findAccountCurrency.accountCurrency_id,
-          eventType: 'TRANSACTION_CONFIRM',
-          currencyId,
-          data: {
-            txid,
-            status: findTx.Transaction.result ? 'success' : 'failed',
-            amount: findTx.Transaction.amount,
-            symbol: DBName,
-            direction: findTx.direction === 0 ? 'send' : 'receive',
-            confirmations: findBlockInfo.block - findTx.Transaction.block,
-            timestamp: findTx.Transaction.timestamp,
-            source_addresses: findTx.Transaction.source_addresses,
-            destination_addresses: findTx.Transaction.destination_addresses,
-            fee: findTx.Transaction.fee,
-            gas_price: findTx.Transaction.gas_price,
-            gas_used: findTx.Transaction.gas_used,
-            note: findTx.Transaction.note,
-            balance: 0,
-          },
-        }),
-        click_action: 'FLUTTER_NOTIFICATION_CLICK',
-      });
-      return true;
+        for (const _blockchain of newBlockchain) {
+          const DBName = Utils.blockchainIDToDBName(_blockchain.blockchain_id);
+          const _db = this.database.db[DBName];
+
+          const findExtendPublicKey = await this.database.db.bitcoin_mainnet.Account.findOne({
+            where: { user_id: _user.user_id },
+            attributes: ['extend_public_key'],
+          });
+          console.log('findExtendPublicKey:', findExtendPublicKey.extend_public_key);
+
+          const insertAccount = await _db.Account.create({
+            account_id: uuidv4(),
+            user_id: _user.user_id,
+            blockchain_id: _blockchain.blockchain_id,
+            purpose: 3324,
+            curve_type: 0,
+            extend_public_key: findExtendPublicKey.extend_public_key,
+            regist_block_num: 0,
+          });
+          console.log('insertAccount', !!insertAccount);
+
+          await _db.AccountCurrency.create({
+            accountCurrency_id: uuidv4(),
+            account_id: insertAccount.account_id,
+            currency_id: _blockchain.currency_id,
+            balance: '0',
+            number_of_external_key: '0',
+            number_of_internal_key: '0',
+          });
+          console.log('insertAccountCurrency true');
+
+          const coinType = _blockchain.coin_type;
+
+          const hdWallet = new HDWallet({ extendPublicKey: findExtendPublicKey.extend_public_key });
+          const wallet = hdWallet.getWalletInfo({ coinType, blockchainID: _blockchain.blockchain_id });
+          console.log('init wallet');
+
+          await _db.AccountAddress.create({
+            accountAddress_id: uuidv4(),
+            account_id: insertAccount.account_id,
+            chain_index: 0,
+            key_index: 0,
+            public_key: wallet.publicKey,
+            address: wallet.address,
+          });
+          console.log('insertAccountAddress true');
+
+          if (_blockchain.blockchain_id === '80000000' || _blockchain.blockchain_id === 'F0000000' || _blockchain.blockchain_id === '80000091' || _blockchain.blockchain_id === 'F0000091') {
+            const changeWallet = hdWallet.getWalletInfo({ coinType, blockchainID: _blockchain.blockchain_id, change: 1 });
+            console.log('get changeWallet');
+            await _db.AccountAddress.create({
+              accountAddress_id: uuidv4(),
+              account_id: insertAccount.account_id,
+              chain_index: 1,
+              key_index: 0,
+              public_key: changeWallet.publicKey,
+              address: changeWallet.address,
+            });
+            console.log('insertAccountAddress true');
+          }
+        }
+      }
     } catch (e) {
-      console.log(e);
-      return e;
+      console.log('e:', e);
     }
   }
 }

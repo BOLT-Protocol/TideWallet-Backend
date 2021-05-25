@@ -271,5 +271,5 @@ pathname = [
   "get | /api/v1/system/wallet | Bot.Blockchain.ServerWallets",
 
   # tmp
-  "post | /api/v1/test | Bot.User.test",
+  "post | /api/v1/test | Bot.User._AddNewSupportBlockchainAccount",
 ]
