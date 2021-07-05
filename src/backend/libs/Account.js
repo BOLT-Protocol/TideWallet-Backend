@@ -153,6 +153,7 @@ class Account extends Bot {
   }
 
   async AccountList({ token }) {
+    const t1 = Date.now();
     if (!token) return new ResponseFormat({ message: 'invalid token', code: Codes.INVALID_ACCESS_TOKEN });
     const tokenInfo = await Utils.verifyToken(token);
     const payload = [];
@@ -245,6 +246,8 @@ class Account extends Bot {
         }
       }
 
+      const t2 = Date.now();
+      this.logger.log(`AccountList: ${(t2 - t1) / 1000} sec`);
       return new ResponseFormat({ message: 'Get Account List', payload });
     } catch (e) {
       console.log(e); // -- no console.log

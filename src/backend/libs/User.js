@@ -38,11 +38,14 @@ class User extends Bot {
 
   async UserAppID({ body, retry = 3 }) {
     const { id } = body;
+    const t1 = Date.now();
 
     const findUserApp = await this.defaultDBInstance.UserApp.findOne({
       where: { app_id: id },
     });
     if (findUserApp) {
+      const t2 = Date.now();
+      this.logger.log(`UserAppID: ${(t2 - t1) / 1000} sec`);
       return new ResponseFormat({
         message: 'User App ID',
         payload: {
@@ -67,6 +70,8 @@ class User extends Bot {
       }, 300);
     }
 
+    const t2 = Date.now();
+    this.logger.log(`UserAppID: ${(t2 - t1) / 1000} sec`);
     return new ResponseFormat({
       message: 'User App ID',
       payload: {
@@ -230,6 +235,7 @@ class User extends Bot {
       return new ResponseFormat({ message: 'invalid input', code: Codes.INVALID_INPUT });
     }
     try {
+      const t1 = Date.now();
       const data = await Utils.verifyToken(token, true);
       const findTokenSecret = await this.defaultDBInstance.TokenSecret.findOne({
         where: {
@@ -252,6 +258,8 @@ class User extends Bot {
 
         return tokenObj;
       });
+      const t2 = Date.now();
+      this.logger.log(`AccessTokenRenew: ${(t2 - t1) / 1000} sec`);
       return new ResponseFormat({ message: 'Token Renew', payload });
     } catch (e) {
       this.logger.error('AccessTokenRenew e:', e);
